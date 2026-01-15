@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>NFC Scanner</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      background: #111;
+      color: #0f0;
+      padding: 20px;
+    }
+    h1 {
+      font-size: 18px;
+      margin-bottom: 10px;
+    }
+    #status {
+      padding: 10px;
+      margin-bottom: 20px;
+      border-radius: 4px;
+      font-weight: bold;
+    }
+    #status.connected {
+      background: #1a4d1a;
+      color: #0f0;
+    }
+    #status.disconnected {
+      background: #4d1a1a;
+      color: #f00;
+    }
+    #status.connecting {
+      background: #4d4d1a;
+      color: #ff0;
+    }
+    ul {
+      list-style: none;
+      padding: 0;
+    }
+    li {
+      padding: 8px;
+      border-bottom: 1px solid #333;
+      font-family: monospace;
+    }
+  </style>
+</head>
+<body>
+  <h1>Live NFC Scans</h1>
+  <div id="status" class="connecting">Connecting to server...</div>
+  <ul id="list"></ul>
+
+<script>
+  const list = document.getElementById('list');
+  const status = document.getElementById('status');
+  const ws = new WebSocket('ws://localhost:8080');
+
+  function updateStatus(state, message) {
+    status.className = state;
+    status.textContent = message;
+  }
+
+  ws.onopen = () => {
+    console.log('WebSocket connected');
+    updateStatus('connected', '✓ Connected - Waiting for NFC scans...');
+  };
+
+  ws.onerror = (err) => {
+    console.error('WebSocket error', err);
+    updateStatus('disconnected', '✗ Connection error');
+  };
+
+  ws.onclose = () => {
+    console.warn('WebSocket closed');
+    updateStatus('disconnected', '✗ Disconnected from server');
+    
+    // Attempt to reconnect after 3 seconds
+    setTimeout(() => {
+      updateStatus('connecting', 'Reconnecting...');
+      location.reload();
+    }, 3000);
+  };
+
+  ws.onmessage = (event) => {
+    console.log('Message received:', event.data);
+
+    const data = JSON.parse(event.data);
+    
+    // Handle connection confirmation message
+    if (data.type === 'connected') {
+      console.log('✓ Server confirmed connection');
+      return;
+    }
+    
+    // Handle NFC scan data
+    if (data.uid) {
+      const li = document.createElement('li');
+      li.textContent = `${new Date(data.timestamp).toLocaleTimeString()} — ${data.uid}`;
+      list.prepend(li);
+      
+      // Update status to show last scan
+      updateStatus('connected', `✓ Connected - Last scan: ${new Date(data.timestamp).toLocaleTimeString()}`);
+    }
+  };
+</script>
+
+</body>
+</html>
